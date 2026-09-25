@@ -39,28 +39,47 @@ class CaptureError(Exception):
     pass
 
 
+SECTION_HEADER = 0x0A0D0D0A
+ENHANCED_PACKET = 0x00000006
+BYTE_ORDER_MAGIC = 0x1A2B3C4D
+
+
+def _endianness_at(data, off):
+    """Section headers declare byte order; anything else is assumed little."""
+    magic = struct.unpack_from("<I", data, off + 8)[0]
+    return "<" if magic == BYTE_ORDER_MAGIC else ">"
+
+
+def _blocks(data):
+    """Yield (block_type, block_body, endianness) for each pcapng block.
+
+    Endianness is a property of the enclosing section, so it is carried along
+    as the walk proceeds rather than derived per block.
+    """
+    off, endian = 0, "<"
+    while off + 12 <= len(data):
+        btype, blen = struct.unpack_from("<II", data, off)
+        if btype == SECTION_HEADER:
+            endian = _endianness_at(data, off)
+            btype, blen = struct.unpack_from(endian + "II", data, off)
+        if blen < 12 or off + blen > len(data):
+            return
+        yield btype, data[off + 8:off + blen - 4], endian
+        off += blen
+
+
 def read_pcapng(path):
     """Yield (frame_number, timestamp, raw_bytes) for each packet block."""
     with open(path, "rb") as fh:
         data = fh.read()
-    off, endian, n = 0, "<", 0
-    while off + 12 <= len(data):
-        btype, blen = struct.unpack_from("<II", data, off)
-        if btype == 0x0A0D0D0A:  # Section Header: re-derive endianness
-            if struct.unpack_from("<I", data, off + 8)[0] == 0x1A2B3C4D:
-                endian = "<"
-            else:
-                endian = ">"
-            btype, blen = struct.unpack_from(endian + "II", data, off)
-        if blen < 12 or off + blen > len(data):
-            break
-        body = data[off + 8:off + blen - 4]
-        if btype == 0x00000006:  # Enhanced Packet Block
-            _, ts_hi, ts_lo, caplen, _ = struct.unpack_from(
-                endian + "IIIII", body, 0)
-            n += 1
-            yield n, (ts_hi << 32) | ts_lo, body[20:20 + caplen]
-        off += blen
+    n = 0
+    for btype, body, endian in _blocks(data):
+        if btype != ENHANCED_PACKET:
+            continue
+        _, ts_hi, ts_lo, caplen, _ = struct.unpack_from(
+            endian + "IIIII", body, 0)
+        n += 1
+        yield n, (ts_hi << 32) | ts_lo, body[20:20 + caplen]
 
 
 def parse_usb(pkt):
@@ -107,23 +126,38 @@ def load(path):
     return counts, payloads, frames, excess
 
 
+TOP_PAYLOADS = 12
+
+
+def _print_endpoint_table(counts):
+    for key, n in sorted(counts.items()):
+        print(f"  bus{key[0]}.dev{key[1]}.ep{key[2]:#04x} "
+              f"{key[3]:9s} {key[4]:3s} {n:5d}")
+
+
+def _print_payload_table(payloads):
+    ranked = sorted(payloads.items(), key=lambda kv: -kv[1])[:TOP_PAYLOADS]
+    for (key, data), n in ranked:
+        print(f"  [{n:5d}x] {key[4]:3s} ep{key[2]:#04x} "
+              f"len={len(data):3d} {data.hex()[:72]}")
+
+
+def report(path):
+    counts, payloads, frames, excess = load(path)
+    print(f"=== {path}: {frames} packets, "
+          f"{excess} unparsed trailing bytes ===")
+    _print_endpoint_table(counts)
+    print(f"  -> {len(payloads)} unique payloads\n")
+    _print_payload_table(payloads)
+    print()
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     for path in argv[1:]:
-        counts, payloads, frames, excess = load(path)
-        print(f"=== {path}: {frames} packets, "
-              f"{excess} unparsed trailing bytes ===")
-        for key, n in sorted(counts.items()):
-            print(f"  bus{key[0]}.dev{key[1]}.ep{key[2]:#04x} "
-                  f"{key[3]:9s} {key[4]:3s} {n:5d}")
-        print(f"  -> {len(payloads)} unique payloads\n")
-        for (key, data), n in sorted(payloads.items(),
-                                      key=lambda kv: -kv[1])[:12]:
-            print(f"  [{n:5d}x] {key[4]:3s} ep{key[2]:#04x} "
-                  f"len={len(data):3d} {data.hex()[:72]}")
-        print()
+        report(path)
     return 0
 
 

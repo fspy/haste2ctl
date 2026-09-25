@@ -354,6 +354,9 @@ def find_vendor_node(override=None, wait=0.0):
 class Mouse:
     def __init__(self, node):
         self.node = node
+        # Set by set_color; consumed by the brightness write path, because a
+        # colour frame outranks a later brightness write until it settles.
+        self.colour_frame_pending = False
         try:
             self.fd = os.open(node, os.O_RDWR)
         except PermissionError:
@@ -500,6 +503,7 @@ class Mouse:
         for pkt in (begin, chunk):
             self._send(pkt)
             results.append(self._await_ack(timeout, 0x44, pkt[1]))
+        self.colour_frame_pending = True
         return results
 
 
@@ -731,10 +735,15 @@ def _all_acks_succeeded(results):
 BRIGHTNESS_MAX = 255
 LIGHT_SHORTCUTS = {"off": 0, "on": 255}
 
-# The firmware silently drops a 40 01 brightness write that arrives straight
-# after a direct lighting frame - the frame has to settle first. A single
-# retry covers that race; if it still mismatches, the value genuinely did not
-# stick and we say so.
+# A direct colour frame is sticky. Roughly COLOUR_SETTLE_S after one lands the
+# firmware reasserts it at full brightness, which undoes any 40 01 brightness
+# write issued in the meantime - the write is ACKed and does take effect, it
+# just does not stay. Measured on this mouse at ~2 s.
+#
+# So a brightness write that follows a colour frame in the same process is
+# re-applied once, after the settle window. The common case (brightness only,
+# e.g. the udev unit on plug-in) never pays this cost.
+COLOUR_SETTLE_S = 2.2
 BRIGHTNESS_ATTEMPTS = 2
 
 
@@ -777,14 +786,34 @@ def _report_brightness(node, level, ack, verdict):
     )
 
 
-def _set_brightness_verified(mouse, level):
-    """Write brightness, read it back, retrying once. Returns (readback, ack)."""
-    got = res = None
-    for _ in range(BRIGHTNESS_ATTEMPTS):
-        res = mouse.set_brightness(level)
-        got, _ = mouse.read_brightness()
+def _write_brightness(mouse, level):
+    res = mouse.set_brightness(level)
+    got, _ = mouse.read_brightness()
+    return got, res
+
+
+def _needs_settle(mouse, got, level, sticky):
+    """Should this write wait out the colour-frame window and re-apply?"""
+    return got == level and (sticky or mouse.colour_frame_pending)
+
+
+def _set_brightness_verified(mouse, level, sticky=False):
+    """Write brightness and confirm it stuck. Returns (readback, ack).
+
+    Retries once on a plain mismatch, and re-applies after the colour-frame
+    settle window when it knows a frame is in play - either because one was
+    sent in this process, or because `sticky` was asked for explicitly (which
+    is what you need across separate invocations, e.g. from a script).
+    """
+    got, res = _write_brightness(mouse, level)
+    for _ in range(BRIGHTNESS_ATTEMPTS - 1):
         if got == level:
             break
+        got, res = _write_brightness(mouse, level)
+    if _needs_settle(mouse, got, level, sticky):
+        time.sleep(COLOUR_SETTLE_S)
+        got, res = _write_brightness(mouse, level)
+        mouse.colour_frame_pending = False
     return got, res
 
 
@@ -819,7 +848,7 @@ def cmd_light(args):
         if kind == "color":
             return _write_colour(node, m, value, args.leds)
 
-        got, res = _set_brightness_verified(m, value)
+        got, res = _set_brightness_verified(m, value, args.sticky)
     ok = got == value
     _report_brightness(
         node, got, res, "ok" if ok else f"MISMATCH (want {value})"
@@ -887,6 +916,12 @@ def main():
         f"number) or a colour name",
     )
     p.add_argument("--leds", type=int, default=1, help="LED slot count (default 1)")
+    p.add_argument(
+        "--sticky",
+        action="store_true",
+        help=f"wait out the {COLOUR_SETTLE_S}s colour-frame settle window and "
+             f"re-apply, so the value survives a colour frame sent by an "
+             f"earlier invocation (costs that much time)")
     p.set_defaults(fn=cmd_light)
 
     p = sub.add_parser("polling", help="USB polling rate")

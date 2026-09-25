@@ -35,6 +35,55 @@ def payload_sequence(path):
     return out
 
 
+MAX_SHOWN = 20
+HEX_PREVIEW = 72
+
+
+def _print_file_header(path, pl, frames, excess):
+    print(f"{path}\n  {frames} packets, {excess} unparsed, "
+          f"{len(set(pl))} unique (endpoint,payload) pairs")
+
+
+def _print_only(label, keys):
+    if not keys:
+        print(f"  {label}: 0")
+        return
+    print(f"  {label}: {len(keys)}")
+    for key, data in sorted(keys)[:MAX_SHOWN]:
+        print(f"    {key[4]} ep{key[2]:#04x} {data.hex()[:HEX_PREVIEW]}")
+
+
+def _first_divergence(a_seq, b_seq):
+    """Index of the first differing transfer within the common prefix."""
+    common = min(len(a_seq), len(b_seq))
+    return next((i for i in range(common) if a_seq[i] != b_seq[i]), None)
+
+
+def _print_positional(a_path, b_path):
+    a_seq, b_seq = payload_sequence(a_path), payload_sequence(b_path)
+    common = min(len(a_seq), len(b_seq))
+    first = _first_divergence(a_seq, b_seq)
+    print(f"\n  positional: A has {len(a_seq)} transfers, B has {len(b_seq)}; "
+          f"comparing {common}")
+    if first is None:
+        print("  IDENTICAL for the whole common prefix")
+    else:
+        print(f"  first divergence at index {first}:")
+        for label, seq in (("A", a_seq), ("B", b_seq)):
+            key, data = seq[first]
+            print(f"    {label} {key} {data.hex()[:HEX_PREVIEW]}")
+
+
+def _host_commands(payloads):
+    return {k[1] for k in payloads if k[0][4] == "OUT" and k[1]}
+
+
+def _print_commands(a_pl, b_pl):
+    print("\n  distinct host->device commands:")
+    for label, pl in (("A", a_pl), ("B", b_pl)):
+        print(f"    {label}: {[d.hex()[:12] for d in sorted(_host_commands(pl))]}")
+
+
 def main(argv):
     if len(argv) != 3:
         print(__doc__.strip(), file=sys.stderr)
@@ -45,40 +94,20 @@ def main(argv):
     _, b_pl, b_frames, b_excess = load(b_path)
     a_keys, b_keys = set(a_pl), set(b_pl)
 
-    print(f"{a_path}\n  {a_frames} packets, {a_excess} unparsed, "
-          f"{len(a_keys)} unique (endpoint,payload) pairs")
-    print(f"{b_path}\n  {b_frames} packets, {b_excess} unparsed, "
-          f"{len(b_keys)} unique (endpoint,payload) pairs\n")
-
-    only_a = a_keys - b_keys
-    only_b = b_keys - a_keys
-    for label, keys in (("only in A", only_a), ("only in B", only_b)):
-        if not keys:
-            print(f"  {label}: 0")
-            continue
-        print(f"  {label}: {len(keys)}")
-        for key, data in sorted(keys)[:20]:
-            print(f"    {key[4]} ep{key[2]:#04x} {data.hex()[:72]}")
+    _print_file_header(a_path, a_pl, a_frames, a_excess)
+    _print_file_header(b_path, b_pl, b_frames, b_excess)
+    print()
+    _print_only("only in A", a_keys - b_keys)
+    _print_only("only in B", b_keys - a_keys)
     print(f"\n  payload sets identical: {a_keys == b_keys}")
 
-    a_seq, b_seq = payload_sequence(a_path), payload_sequence(b_path)
-    common = min(len(a_seq), len(b_seq))
-    first_diff = next((i for i in range(common) if a_seq[i] != b_seq[i]), None)
-    print(f"\n  positional: A has {len(a_seq)} transfers, B has {len(b_seq)}; "
-          f"comparing {common}")
-    if first_diff is None:
-        print("  IDENTICAL for the whole common prefix")
-    else:
-        print(f"  first divergence at index {first_diff}:")
-        print(f"    A {a_seq[first_diff][0]} {a_seq[first_diff][1].hex()[:72]}")
-        print(f"    B {b_seq[first_diff][0]} {b_seq[first_diff][1].hex()[:72]}")
+    _print_positional(a_path, b_path)
+    _print_commands(a_pl, b_pl)
 
-    outs_a = {k[1] for k in a_pl if k[0][4] == "OUT" and k[1]}
-    outs_b = {k[1] for k in b_pl if k[0][4] == "OUT" and k[1]}
-    print("\n  distinct host->device commands:")
-    print(f"    A: {[d.hex()[:12] for d in sorted(outs_a)]}")
-    print(f"    B: {[d.hex()[:12] for d in sorted(outs_b)]}")
-    return 0 if a_keys == b_keys and first_diff is None else 1
+    identical = a_keys == b_keys
+    positional_ok = _first_divergence(payload_sequence(a_path),
+                                      payload_sequence(b_path)) is None
+    return 0 if identical and positional_ok else 1
 
 
 if __name__ == "__main__":

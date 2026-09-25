@@ -303,13 +303,43 @@ light '#ff0000'  -> 0xFF   (frame forces full brightness)
 light 64         -> 0x40   (40 01 takes over again)
 ```
 
-**Gotcha:** the firmware _silently drops_ a `40 01` brightness write that
-arrives immediately after a colour frame — the frame has to settle first. A
-brightness write in the same breath as a colour frame is ACKed (`result 0x00`)
-and then ignored, so the readback disagrees with what you asked for. The tool
-retries once on a brightness write for this reason; it is a device quirk, not
-a protocol error, and it only bites within a single process — two separate
-`haste2ctl` invocations are always far enough apart.
+**Gotcha: a colour frame outranks a later brightness write.** Two distinct
+firmware behaviours, both measured on this mouse:
+
+1. A `40 01` brightness write issued *immediately* after a direct colour frame
+   is ACKed (`result 0x00`) and then ignored — the readback disagrees with
+   what you asked for. There is also no data reply to a write, so waiting for
+   one just burns the timeout; the tool waits for the ACK instead.
+
+2. Worse, roughly **2 s after a colour frame lands, the firmware reasserts it
+   at full brightness** — overriding any brightness write issued in between.
+   The write genuinely takes effect first, so an immediate readback looks
+   correct, and then the lights come back on by themselves.
+
+```
+light '#00ff00'   -> colour frame
+light 0           -> reads 0x00, reports ok
+  +2 s            -> reads 0xFF, lights back on
+```
+
+So `light 0` after a colour frame is *not* a one-shot write. Two escape
+hatches:
+
+- **Same process** — if a brightness write follows a colour frame in one
+  invocation, the tool knows and re-applies automatically.
+- **Separate invocations** — pass `--sticky` to wait out the window and
+  re-apply explicitly:
+
+  ```bash
+  ./haste2ctl.py light '#00ff00'
+  ./haste2ctl.py light 0 --sticky    # 2.3 s, and it stays off
+  ```
+
+`--sticky` costs ~2.3 s and is only needed in that sequence. An ordinary
+`light 0` — including the udev unit on plug-in — is unaffected and still takes
+~90 ms.
+
+This does not affect the udev unit, which only ever writes brightness.
 
 ## Tests
 
