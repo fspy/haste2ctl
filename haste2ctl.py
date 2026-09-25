@@ -4,8 +4,9 @@ haste2ctl - control a HP / HyperX Pulsefire Haste 2 (USB 03f0:0b97):
 lighting, USB polling rate and DPI stages.
 
 Talks directly to the vendor HID interface (interface 2) via /dev/hidraw, so
-there are no Python dependencies. Report layout was taken from the USB
-capture and cross-checked against the live device.
+there are no Python dependencies. Requires Python 3.10 or newer (for
+int.bit_count). Report layout was taken from the USB capture and
+cross-checked against the live device.
 
 Protocol (64-byte numbered output reports on the interrupt OUT endpoint):
 
@@ -253,12 +254,14 @@ def enumerate_interfaces():
         if hid != (VID, PID):
             continue
         real = os.path.realpath(devdir)
-        found.append({
-            "node": os.path.join("/dev", node),
-            "iface": _iface_number(real),
-            "rdesc": _rdesc_size(devdir),
-            "name": "HP, Inc HyperX Pulsefire Haste 2",
-        })
+        found.append(
+            {
+                "node": os.path.join("/dev", node),
+                "iface": _iface_number(real),
+                "rdesc": _rdesc_size(devdir),
+                "name": "HP, Inc HyperX Pulsefire Haste 2",
+            }
+        )
     return found
 
 
@@ -586,7 +589,7 @@ def _format_stages(reply):
 
 
 def cmd_polling(args):
-    node, why = find_vendor_node(args.node, args.wait)
+    node, _why = find_vendor_node(args.node, args.wait)
     with Mouse(node) as m:
         reply, _ = m.read_config()
         current = divisor_to_poll_rate(reply[RR_OFFSET])
@@ -613,7 +616,7 @@ def cmd_polling(args):
 
 
 def _enabled_stage_count(reply):
-    return bin(reply[STAGE_MASK_OFFSET]).count("1")
+    return reply[STAGE_MASK_OFFSET].bit_count()
 
 
 def _print_dpi(node, reply, stage=None):
@@ -690,7 +693,7 @@ def _set_or_show_stage(node, mouse, reply, args):
 
 
 def cmd_dpi(args):
-    node, why = find_vendor_node(args.node, args.wait)
+    node, _why = find_vendor_node(args.node, args.wait)
     with Mouse(node) as m:
         reply, _ = m.read_config()
         if args.stages is not None:
@@ -850,9 +853,7 @@ def cmd_light(args):
 
         got, res = _set_brightness_verified(m, value, args.sticky)
     ok = got == value
-    _report_brightness(
-        node, got, res, "ok" if ok else f"MISMATCH (want {value})"
-    )
+    _report_brightness(node, got, res, "ok" if ok else f"MISMATCH (want {value})")
     return 0 if ok else 1
 
 
@@ -920,8 +921,9 @@ def main():
         "--sticky",
         action="store_true",
         help=f"wait out the {COLOUR_SETTLE_S}s colour-frame settle window and "
-             f"re-apply, so the value survives a colour frame sent by an "
-             f"earlier invocation (costs that much time)")
+        f"re-apply, so the value survives a colour frame sent by an "
+        f"earlier invocation (costs that much time)",
+    )
     p.set_defaults(fn=cmd_light)
 
     p = sub.add_parser("polling", help="USB polling rate")

@@ -5,7 +5,8 @@ running, then verified directly against the live device on Linux.
 
 `haste2ctl` controls **lighting, USB polling rate and DPI stages** on this
 mouse (USB `03f0:0b97`, an HP-branded HyperX part). It is a dependency-free
-Python script that talks to `/dev/hidraw` directly.
+Python script that talks to `/dev/hidraw` directly, and needs **Python 3.10+**
+(the only version-sensitive construct is `int.bit_count()`).
 
 | File                            | What it is                                          |
 | ------------------------------- | --------------------------------------------------- |
@@ -15,7 +16,7 @@ Python script that talks to `/dev/hidraw` directly.
 | `tests/golden.txt`              | recorded baseline for `test_cli.py`                 |
 | `haste2ctl.rules`               | udev rule: apply lighting on plug-in                |
 | `haste2ctl.service`             | systemd oneshot the rule triggers                   |
-| `install.sh`                    | install (or remove) the above into system locations  |
+| `install.sh`                    | install (or remove) the above into system locations |
 | `tools/pcap_summary.py`         | dependency-free pcapng + USBPcap2 reader            |
 | `tools/pcap_diff.py`            | reproduces the "both captures are identical" result |
 | `turned_lights_{on,off}.pcapng` | the original captures                               |
@@ -191,7 +192,7 @@ Already present on this machine as `/etc/udev/rules.d/00-pulsefire.rules`:
 
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0b97", MODE="0666"
 
-````
+```
 
 Without it, run as root or `MODE="0660", GROUP="input"`.
 
