@@ -1,0 +1,16 @@
+# Apply the Haste 2 brightness whenever the mouse appears on the bus.
+#
+# This fires on every `add`, which covers both boot and replugging mid-session.
+# That is the gap a Hyprland exec-once leaves: it runs once per session and
+# never again if you unplug the mouse.
+#
+# The vendor HID interface (interface 2) is the only one that accepts the
+# lighting command, and it may not be enumerated yet when this fires - hence
+# --wait in the unit.
+#
+# Installed by hand; see README.md.
+
+ACTION=="add", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0b97", TAG+="systemd", ENV{SYSTEMD_WANTS}="haste2ctl.service"
+
+# Keep the existing permissive access so the tool can run as your user too.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0b97", MODE="0666"

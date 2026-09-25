@@ -1,0 +1,255 @@
+### help
+exit=0
+--- stdout ---
+usage: haste2ctl [-h] [--node NODE] [--wait SEC] <noun> ...
+
+Control a HyperX Pulsefire Haste 2 (03f0:0b97): lighting, USB polling rate and DPI stages.
+
+positional arguments:
+  <noun>
+    interfaces  show this mouse's hidraw nodes
+    light       brightness or colour
+    polling     USB polling rate
+    dpi         DPI stages
+
+options:
+  -h, --help    show this help message and exit
+  --node NODE   explicit /dev/hidrawN (skips auto-detection)
+  --wait SEC    wait up to SEC seconds for the vendor interface to appear (for
+                udev/systemd use, where enumeration races)
+
+With no noun, every setting is reported. Brightness is volatile - it is not saved to onboard flash.
+--- stderr ---
+
+### show_all
+exit=0
+--- stdout ---
+USB 03f0:0b97  HP, Inc HyperX Pulsefire Haste 2   /dev/hidrawN
+  brightness   B/255 (B%)   ack_result=0xAA
+  polling      P Hz   (RR=0xRR)
+  dpi stages   C of 5 enabled, active S
+      [<enabled stage lines>]
+--- stderr ---
+
+### interfaces
+exit=0
+--- stdout ---
+USB 03f0:0b97  HP, Inc HyperX Pulsefire Haste 2
+
+  /dev/hidrawN     iface=0  report_desc=  94B  rw   (boot)
+  /dev/hidrawN     iface=1  report_desc=  93B  rw   (boot)
+  /dev/hidrawN     iface=2  report_desc= 598B  rw   <== vendor interface
+
+selected: /dev/hidrawN  (USB interface 2 (vendor HID))
+--- stderr ---
+
+### light_read
+exit=0
+--- stdout ---
+/dev/hidrawN (USB interface 2 (vendor HID))
+brightness: 0xBB (B/255, B%)   ack_result=0xAA
+--- stderr ---
+
+### light_set
+exit=0
+--- stdout ---
+/dev/hidrawN: brightness -> B (B%)  ack_result=0xAA  VERDICT  ok
+--- stderr ---
+
+### light_read_back
+exit=0
+--- stdout ---
+/dev/hidrawN (USB interface 2 (vendor HID))
+brightness: 0xBB (B/255, B%)   ack_result=0xAA
+--- stderr ---
+
+### light_off
+exit=0
+--- stdout ---
+/dev/hidrawN: brightness -> B (B%)  ack_result=0xAA  VERDICT  ok
+--- stderr ---
+
+### light_on
+exit=0
+--- stdout ---
+/dev/hidrawN: brightness -> B (B%)  ack_result=0xAA  VERDICT  ok
+--- stderr ---
+
+### light_colour_hex
+exit=0
+--- stdout ---
+/dev/hidrawN: color #ff8800 x1 slot(s)  acks=['0x00', '0x00']  ok
+--- stderr ---
+
+### light_colour_short
+exit=0
+--- stdout ---
+/dev/hidrawN: color #ff0000 x1 slot(s)  acks=['0x00', '0x00']  ok
+--- stderr ---
+
+### light_colour_name
+exit=0
+--- stdout ---
+/dev/hidrawN: color #00ff00 x1 slot(s)  acks=['0x00', '0x00']  ok
+--- stderr ---
+
+### light_bad_colour
+exit=2
+--- stdout ---
+--- stderr ---
+error: expected RRGGBB hex or a colour name
+
+### light_out_of_range
+exit=2
+--- stdout ---
+--- stderr ---
+error: 9999 is out of range for brightness (0-255).
+
+### light_six_digits
+exit=2
+--- stdout ---
+--- stderr ---
+error: 123456 is out of range for brightness (0-255). If you meant the colour #123456, write it as '#123456'.
+
+### light_leds_bad
+exit=2
+--- stdout ---
+--- stderr ---
+error: leds must be 1..20 (protocol caps a chunk at 20 slots)
+
+### light_final
+exit=0
+--- stdout ---
+/dev/hidrawN: brightness -> B (B%)  ack_result=0xAA  VERDICT  ok
+--- stderr ---
+
+### polling
+exit=0
+--- stdout ---
+/dev/hidrawN: polling rate P Hz  (RR=0xRR)
+--- stderr ---
+
+### dpi
+exit=0
+--- stdout ---
+/dev/hidrawN: DPI stages  (mask=0xMM, active=S)
+    stage 0: NNNN DPI  indicator #ff0000  code=0x0007
+    stage 1: NNNN DPI  indicator #0000ff  code=0x000F
+    stage 2: NNNN DPI  indicator #ffff00  code=0x0017
+    stage 3: NNNN DPI  indicator #00ff00  code=0x001F  <- active
+    stage 4: NNNN DPI  indicator #000000  code=0x018F  (disabled)
+--- stderr ---
+
+### dpi_one_stage
+exit=0
+--- stdout ---
+/dev/hidrawN: DPI stages  (mask=0xMM, active=S)
+    stage 4: NNNN DPI  indicator #000000  code=0x018F  (disabled)
+--- stderr ---
+
+### dpi_one_active
+exit=0
+--- stdout ---
+/dev/hidrawN: DPI stages  (mask=0xMM, active=S)
+    stage 2: NNNN DPI  indicator #ffff00  code=0x0017
+--- stderr ---
+
+### dpi_current
+exit=0
+--- stdout ---
+/dev/hidrawN: DPI stages  (mask=0xMM, active=S)
+    stage 3: NNNN DPI  indicator #00ff00  code=0x001F  <- active
+--- stderr ---
+
+### dpi_current_alias
+exit=0
+--- stdout ---
+/dev/hidrawN: DPI stages  (mask=0xMM, active=S)
+    stage 3: NNNN DPI  indicator #00ff00  code=0x001F  <- active
+--- stderr ---
+
+### dpi_stage_word
+exit=2
+--- stdout ---
+--- stderr ---
+error: stage must be 0-4 or current/active, got 'bogus'
+
+### polling_bad_rate
+exit=2
+--- stdout ---
+--- stderr ---
+error: unsupported polling rate 999; choose from [125, 250, 500, 1000, 2000, 4000, 8000]
+
+### polling_too_fast
+exit=2
+--- stdout ---
+--- stderr ---
+error: unsupported polling rate 16000; choose from [125, 250, 500, 1000, 2000, 4000, 8000]
+
+### dpi_bad_stage
+exit=2
+--- stdout ---
+--- stderr ---
+error: stage must be 0-4, got 5
+
+### dpi_neg_stage
+exit=2
+--- stdout ---
+--- stderr ---
+error: stage must be 0-4, got -1
+
+### dpi_not_multiple
+exit=2
+--- stdout ---
+--- stderr ---
+error: DPI 1234 is not a multiple of 50, so the mouse could not read it back identically; use 1200 or 1250
+
+### dpi_current_low
+exit=2
+--- stdout ---
+--- stderr ---
+error: DPI 999 is not a multiple of 50, so the mouse could not read it back identically; use 950 or 1000
+
+### dpi_out_of_range
+exit=2
+--- stdout ---
+--- stderr ---
+error: DPI must be 50-26000, got 26100
+
+### dpi_stages_too_few
+exit=2
+--- stdout ---
+--- stderr ---
+error: stage count must be 4-5 (the mouse has 5 slots), got 3
+
+### dpi_stages_too_many
+exit=2
+--- stdout ---
+--- stderr ---
+error: stage count must be 4-5 (the mouse has 5 slots), got 9
+
+### dpi_stages_nan
+exit=2
+--- stdout ---
+--- stderr ---
+usage: haste2ctl dpi [-h] [--stages N] [STAGE] [DPI]
+haste2ctl dpi: error: argument --stages: invalid int value: 'abc'
+
+### wrong_node_type
+exit=2
+--- stdout ---
+--- stderr ---
+error: device disconnected
+
+### nonexistent_node
+exit=2
+--- stdout ---
+--- stderr ---
+error: cannot open /nonexistent/hidrawX: [Errno 2] No such file or directory: '/nonexistent/hidrawX'
+
+### no_such_noun
+exit=2
+--- stdout ---
+--- stderr ---
+usage: haste2ctl [-h] [--node NODE] [--wait SEC] <noun> ...
+haste2ctl: error: argument <noun>: invalid choice: 'wibble' (choose from 'interfaces', 'light', 'polling', 'dpi')

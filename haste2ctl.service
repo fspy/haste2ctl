@@ -1,0 +1,29 @@
+# Set the HyperX Pulsefire Haste 2 brightness on plug-in.
+#
+# Triggered by haste2ctl.rules via SYSTEMD_WANTS, so it runs on boot and on
+# every replug. Type=oneshot: no daemon, no polling, exits when done.
+#
+# To change the brightness, edit the value in the ExecStart below:
+#   0        lights off
+#   255      full
+#   <n>      any 0-255
+# To pin a colour instead, swap in:
+#   ExecStart=... haste2ctl.py --wait 10 light '#ff8800'
+#
+# Polling and DPI are set the same way, e.g.:
+#   ExecStart=... haste2ctl.py --wait 10 polling 8000
+#
+# Runs as root, though it does not have to - the udev rule sets MODE=0666 on
+# this device, so User= would work if you prefer not to run as root.
+
+[Unit]
+Description=Set HyperX Pulsefire Haste 2 lighting
+Documentation=file:///home/fspy/ngenuity2/README.md
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+# --wait covers the case where udev fires for the boot-mouse interface before
+# the vendor interface has been enumerated.
+ExecStart=/home/fspy/ngenuity2/haste2ctl.py --wait 10 light 0
+TimeoutSec=20
