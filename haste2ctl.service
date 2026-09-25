@@ -3,27 +3,31 @@
 # Triggered by haste2ctl.rules via SYSTEMD_WANTS, so it runs on boot and on
 # every replug. Type=oneshot: no daemon, no polling, exits when done.
 #
+# The ExecStart path is deliberately a system location, not a home directory.
+# This is a *system* unit, so it runs as root and there is no $HOME and no
+# %h that means anything useful (%h expands to /root, and there is no %HOME
+# specifier at all - %HOME silently expands to the hostname plus "OME").
+#
 # To change the brightness, edit the value in the ExecStart below:
 #   0        lights off
 #   255      full
 #   <n>      any 0-255
-# To pin a colour instead, swap in:
-#   ExecStart=... haste2ctl.py --wait 10 light '#ff8800'
+# To pin a colour, or to set polling or DPI on plug-in instead, swap the noun:
+#   ExecStart=/usr/local/bin/haste2ctl.py --wait 10 light '#ff8800'
+#   ExecStart=/usr/local/bin/haste2ctl.py --wait 10 polling 8000
 #
-# Polling and DPI are set the same way, e.g.:
-#   ExecStart=... haste2ctl.py --wait 10 polling 8000
-#
-# Runs as root, though it does not have to - the udev rule sets MODE=0666 on
-# this device, so User= would work if you prefer not to run as root.
+# Root is used because a system unit has no user to run as. It is not
+# required for permissions: the udev rule sets MODE=0666 on this device, so
+# the script also works as your normal user from a terminal.
 
 [Unit]
 Description=Set HyperX Pulsefire Haste 2 lighting
-Documentation=file:///home/fspy/ngenuity2/README.md
+Documentation=file:///usr/local/share/doc/haste2ctl/README.md
 
 [Service]
 Type=oneshot
 RemainAfterExit=no
 # --wait covers the case where udev fires for the boot-mouse interface before
 # the vendor interface has been enumerated.
-ExecStart=/home/fspy/ngenuity2/haste2ctl.py --wait 10 light 0
+ExecStart=/usr/local/bin/haste2ctl.py --wait 10 light 0
 TimeoutSec=20

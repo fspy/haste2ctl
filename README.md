@@ -7,34 +7,35 @@ running, then verified directly against the live device on Linux.
 mouse (USB `03f0:0b97`, an HP-branded HyperX part). It is a dependency-free
 Python script that talks to `/dev/hidraw` directly.
 
-| File | What it is |
-|---|---|
-| `haste2ctl.py` | the tool |
-| `test_units.py` | pure-helper tests, no device needed |
-| `test_cli.py` | golden-output CLI test against the live mouse |
-| `tests/golden.txt` | recorded baseline for `test_cli.py` |
-| `haste2ctl.rules` | udev rule: apply lighting on plug-in |
-| `haste2ctl.service` | systemd oneshot the rule triggers |
-| `tools/pcap_summary.py` | dependency-free pcapng + USBPcap2 reader |
-| `tools/pcap_diff.py` | reproduces the "both captures are identical" result |
-| `turned_lights_{on,off}.pcapng` | the original captures |
-| `lsusb.txt` | `lsusb -v` dump of the device on Linux |
+| File                            | What it is                                          |
+| ------------------------------- | --------------------------------------------------- |
+| `haste2ctl.py`                  | the tool                                            |
+| `test_units.py`                 | pure-helper tests, no device needed                 |
+| `test_cli.py`                   | golden-output CLI test against the live mouse       |
+| `tests/golden.txt`              | recorded baseline for `test_cli.py`                 |
+| `haste2ctl.rules`               | udev rule: apply lighting on plug-in                |
+| `haste2ctl.service`             | systemd oneshot the rule triggers                   |
+| `install.sh`                    | install (or remove) the above into system locations  |
+| `tools/pcap_summary.py`         | dependency-free pcapng + USBPcap2 reader            |
+| `tools/pcap_diff.py`            | reproduces the "both captures are identical" result |
+| `turned_lights_{on,off}.pcapng` | the original captures                               |
+| `lsusb.txt`                     | `lsusb -v` dump of the device on Linux              |
 
 ## Device
 
-| | |
-|---|---|
-| Marketing name | HP, Inc HyperX Pulsefire Haste 2 |
-| VID:PID | `03f0:0b97` |
-| bcdDevice | `0x1111` |
-| Bus speed | High Speed (480 Mbps) |
-| Interfaces | 0 = boot mouse (EP 0x81 IN)<br>1 = boot keyboard (EP 0x82 IN)<br>**2 = vendor HID (EP 0x83 IN, EP 0x04 OUT)** |
+|                |                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| Marketing name | HP, Inc HyperX Pulsefire Haste 2                                                                              |
+| VID:PID        | `03f0:0b97`                                                                                                   |
+| bcdDevice      | `0x1111`                                                                                                      |
+| Bus speed      | High Speed (480 Mbps)                                                                                         |
+| Interfaces     | 0 = boot mouse (EP 0x81 IN)<br>1 = boot keyboard (EP 0x82 IN)<br>**2 = vendor HID (EP 0x83 IN, EP 0x04 OUT)** |
 
 All configuration is done through **interface 2**, a 64-byte numbered-report
 vendor HID interface (598-byte report descriptor). The boot interfaces are
 untouched.
 
-`0x03f0` is **HP, Inc** — this is *not* a SteelSeries device and *not* a
+`0x03f0` is **HP, Inc** — this is _not_ a SteelSeries device and _not_ a
 Sensei 310. SteelSeries mice use VID `0x1038`. Neither `rivalcfg` nor
 `ngenuity` will touch this hardware; they gate on exact VID/PID and this PID is
 in neither tool's device list.
@@ -48,15 +49,15 @@ apart from the 94-byte (mouse) and 93-byte (keyboard) boot nodes.
 64-byte output reports on the interrupt OUT endpoint, zero-padded. Byte 0 is the
 report ID.
 
-| Report | Meaning |
-|---|---|
-| `40 01 00 00 BB` | set **volatile** brightness, `BB` = 0..255 |
-| `40 02` | read brightness → reply `41 02 BB` |
-| `44 01 NN 00` | begin direct lighting frame, `NN` chunks |
-| `44 02 II 00 [RGB triples]` | chunk `II`, up to 20 LED slots (3 bytes each) |
-| `10 01` | device info query → reply `11 01` |
-| `32 02` | query polling + DPI table → reply `33 02 RR MM AA [stages]` |
-| `32 01 00 00 RR MM AA [stages]` | live write of that same table |
+| Report                          | Meaning                                                     |
+| ------------------------------- | ----------------------------------------------------------- |
+| `40 01 00 00 BB`                | set **volatile** brightness, `BB` = 0..255                  |
+| `40 02`                         | read brightness → reply `41 02 BB`                          |
+| `44 01 NN 00`                   | begin direct lighting frame, `NN` chunks                    |
+| `44 02 II 00 [RGB triples]`     | chunk `II`, up to 20 LED slots (3 bytes each)               |
+| `10 01`                         | device info query → reply `11 01`                           |
+| `32 02`                         | query polling + DPI table → reply `33 02 RR MM AA [stages]` |
+| `32 01 00 00 RR MM AA [stages]` | live write of that same table                               |
 
 ACK format (first byte `0xff`):
 
@@ -65,8 +66,8 @@ ff 01 e1 00 11 00 95 59 65 04 69 11 00 00 | report | sub | result | ...
  0  1  2  3  4  5  6  7  8  9  10 11 12 13    14     15     16
 ```
 
-* `result` (byte 16) `0x00` = success
-* unsolicited `45 02 00 …` = device notification, ignore
+- `result` (byte 16) `0x00` = success
+- unsolicited `45 02 00 …` = device notification, ignore
 
 Brightness is **volatile** — it is not written to the mouse's onboard flash, so
 it must be re-applied after reconnect. The mouse has 1 LED slot (logo), so
@@ -123,7 +124,8 @@ With no noun at all, everything is reported.
 ./haste2ctl.py                    # report every setting
 ./haste2ctl.py interfaces         # hidraw nodes, and which one is the vendor interface
 
-./haste2ctl.py light              # read brightness./haste2ctl.py light 128          # set brightness (0-255)
+./haste2ctl.py light              # read brightness
+./haste2ctl.py light 128          # set brightness (0-255)
 ./haste2ctl.py light off          # brightness 0
 ./haste2ctl.py light '#ff8800'    # direct colour frame - the '#' keeps it
                                   # distinct from a bare number
@@ -147,6 +149,7 @@ $ ./haste2ctl.py light 300
 error: 300 is out of range for brightness (0-255). If you meant the colour
 #300, write it as '#300'.
 ```
+
 ```
 
 ## Polling rate and DPI
@@ -185,8 +188,10 @@ with `40 02` where applicable.
 Already present on this machine as `/etc/udev/rules.d/00-pulsefire.rules`:
 
 ```
+
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0b97", MODE="0666"
-```
+
+````
 
 Without it, run as root or `MODE="0660", GROUP="input"`.
 
@@ -199,23 +204,36 @@ to re-apply it:
 replugging mid-session, with no daemon and no polling.
 
 ```bash
-sudo install -m 0644 haste2ctl.rules /etc/udev/rules.d/99-haste2ctl.rules
-sudo install -m 0644 haste2ctl.service /etc/systemd/system/haste2ctl.service
-sudo udevadm control --reload-rules
-sudo systemctl daemon-reload
+sudo ./install.sh              # or sudo ./install.sh --uninstall to remove
 ```
+
+That puts the script at `/usr/local/bin/haste2ctl.py`, the rule and unit in
+`/etc`, and the README under `/usr/local/share/doc/haste2ctl/`.
+
+**Why `/usr/local/bin` and not a home directory:** this is a *system* unit, so
+it runs as root and has no useful home to point at. Measured on this machine:
+
+| | expands to | |
+|---|---|---|
+| `%h` | `/root` | root's home, not yours |
+| `$HOME` | *(empty)* | system services get none |
+| `%HOME` | `hiveOME` | **not a specifier** — systemd reads `%H` (hostname) + `OME` |
+
+`%HOME` is the dangerous one: it fails *silently* with a plausible-looking
+string rather than erroring. A system unit should reference a system path.
 
 To change the level, edit the value in the unit's `ExecStart` — `0` for off,
 `255` for full, or any 0–255. To pin a colour, or to set polling or DPI on
 plug-in instead, swap the noun:
 
 ```
-ExecStart=/home/fspy/ngenuity2/haste2ctl.py --wait 10 light 0
-ExecStart=/home/fspy/ngenuity2/haste2ctl.py --wait 10 light '#ff8800'
-ExecStart=/home/fspy/ngenuity2/haste2ctl.py --wait 10 polling 8000
+ExecStart=/usr/local/bin/haste2ctl.py --wait 10 light 0
+ExecStart=/usr/local/bin/haste2ctl.py --wait 10 light '#ff8800'
+ExecStart=/usr/local/bin/haste2ctl.py --wait 10 polling 8000
 ```
 
-Then `sudo systemctl daemon-reload`.
+Then `sudo systemctl daemon-reload`. Re-run `sudo ./install.sh` after editing
+`haste2ctl.py` in the repo — `/usr/local/bin` is a copy.
 
 `--wait` matters: udev fires per-interface as they enumerate, so the vendor
 interface may not exist yet when the rule matches.
@@ -232,14 +250,15 @@ mouse mid-session and the setting is gone until you log out and back in.
 
 ```lua
 -- ~/.config/hypr/autostart.lua
-Hyprland.exec("/home/fspy/ngenuity2/haste2ctl.py light off")
+-- A user session, so a home-relative path is fine here.
+Hyprland.exec("~/path/to/haste2ctl/haste2ctl.py light off")
 ```
 
 **Polling — removed.** There used to be a `guard` subcommand that re-applied
 brightness every `--interval` seconds. It was deleted rather than hardened,
 because it was the weaker option on every axis:
 
-- it was a *timer*, not an event hook, so it never detected a reconnect — it
+- it was a _timer_, not an event hook, so it never detected a reconnect — it
   just rewrote the value whether or not anything had changed
 - it had no locking, so two instances raced (this produced phantom `MISMATCH`
   results during development)
@@ -255,13 +274,13 @@ The mouse has one addressable LED slot, not one per physical LED. Verified on
 hardware: brightness 0 extinguishes the DPI stage indicator as well as the logo
 and wheel, while DPI stage switching itself keeps working normally.
 
-The distinction is *where each piece of state lives*:
+The distinction is _where each piece of state lives_:
 
-| Function | Lives in | Affected by brightness 0 |
-|---|---|---|
-| DPI stage switching | firmware, triggered by the button | still works |
-| Per-stage indicator colour | onboard flash, written by NGENUITY | still stored, just not emitted |
-| Logo / wheel lighting | firmware, driven by the host brightness register | off |
+| Function                   | Lives in                                         | Affected by brightness 0       |
+| -------------------------- | ------------------------------------------------ | ------------------------------ |
+| DPI stage switching        | firmware, triggered by the button                | still works                    |
+| Per-stage indicator colour | onboard flash, written by NGENUITY               | still stored, just not emitted |
+| Logo / wheel lighting      | firmware, driven by the host brightness register | off                            |
 
 So the per-stage colours are firmware-side state, not host-addressable LEDs.
 Brightness 0 mutes the output path only — it does not desync or erase the
@@ -284,7 +303,7 @@ light '#ff0000'  -> 0xFF   (frame forces full brightness)
 light 64         -> 0x40   (40 01 takes over again)
 ```
 
-**Gotcha:** the firmware *silently drops* a `40 01` brightness write that
+**Gotcha:** the firmware _silently drops_ a `40 01` brightness write that
 arrives immediately after a colour frame — the frame has to settle first. A
 brightness write in the same breath as a colour frame is ACKed (`result 0x00`)
 and then ignored, so the readback disagrees with what you asked for. The tool
@@ -306,5 +325,3 @@ output, but normalises your own settings (brightness, polling rate, stage
 values, indicator colours, active stage) because those are device state rather
 than tool behaviour. Mutate the mouse freely and the suite still passes; the
 mutating cases restore what they change.
-
-
